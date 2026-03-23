@@ -24,24 +24,25 @@ class BalloonView extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final t = (progressDays / (progressDays + 28)).clamp(0.0, 1.0);
-    final alignY = 0.88 - t * 1.45;
+    // Center balloon on screen, then move it up/down based on progress.
+    // This makes centering independent from the left ruler width.
+    final screenHeight = MediaQuery.sizeOf(context).height;
+    final maxShiftY = screenHeight * 0.35;
+    final dy = -t * maxShiftY;
 
-    final startTick = (progressDays - 4).clamp(0, progressDays);
-    final endTick = progressDays + 10;
-    final ticks = <int>[
-      for (var d = startTick; d <= endTick; d++) d,
-    ];
+    final rulerLeft = 8.0;
+    final rulerWidth = 40.0;
 
     return Stack(
       fit: StackFit.expand,
       children: [
         const _SkyBackground(),
         Positioned(
-          left: 8,
+          left: rulerLeft,
           top: 72,
           bottom: 120,
-          width: 40,
-          child: _DayRuler(ticks: ticks, highlight: progressDays),
+          width: rulerWidth,
+          child: _DayRuler(currentDay: progressDays),
         ),
         Positioned(
           left: 0,
@@ -75,14 +76,17 @@ class BalloonView extends StatelessWidget {
             ],
           ),
         ),
-        Align(
-          alignment: Alignment(0, alignY),
-          child: const _BalloonGraphic(),
+        // Balloon: centered on X and Y of the screen, with a score-based vertical shift.
+        Center(
+          child: Transform.translate(
+            offset: Offset(0, dy),
+            child: const _BalloonGraphic(),
+          ),
         ),
+        // Hearts under the AppBar `+` button (top-right).
         Positioned(
-          left: 0,
-          right: 0,
-          bottom: 100,
+          top: MediaQuery.of(context).padding.top + kToolbarHeight + 8,
+          right: 16,
           child: _LivesRow(livesRemaining: livesRemaining),
         ),
         Positioned(
@@ -122,10 +126,13 @@ class _SkyBackground extends StatelessWidget {
 }
 
 class _DayRuler extends StatelessWidget {
-  const _DayRuler({required this.ticks, required this.highlight});
+  const _DayRuler({required this.currentDay});
 
-  final List<int> ticks;
-  final int highlight;
+  // Only show the current day + 2 days before + 2 days after.
+  // Current day is full opacity; distance fades out.
+  final int currentDay;
+
+  static const int range = 2;
 
   @override
   Widget build(BuildContext context) {
@@ -133,40 +140,67 @@ class _DayRuler extends StatelessWidget {
       padding: const EdgeInsets.only(right: 4),
       decoration: BoxDecoration(
         border: Border(
-          right: BorderSide(color: Colors.white.withValues(alpha: 0.35)),
+          right: BorderSide(color: Colors.grey.withValues(alpha: 0.35)),
         ),
       ),
-      child: ListView.builder(
-        reverse: true,
-        itemCount: ticks.length,
-        itemBuilder: (context, index) {
-          final day = ticks[ticks.length - 1 - index];
-          final isHi = day == highlight;
-          return Padding(
-            padding: const EdgeInsets.symmetric(vertical: 6),
-            child: Row(
-              children: [
-                Expanded(
-                  child: Text(
-                    '$day',
-                    textAlign: TextAlign.right,
-                    style: TextStyle(
-                      fontSize: isHi ? 14 : 12,
-                      fontWeight: isHi ? FontWeight.w800 : FontWeight.w500,
-                      color: Colors.white.withValues(
-                        alpha: isHi ? 0.95 : 0.55,
-                      ),
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          // We render 5 fixed vertical slots so the direction is stable.
+          // Values are clamped to 0 (as requested).
+          int clamped(int v) => (v < 0 ? 0 : v);
+          final topToBottomDays = <int>[
+            clamped(currentDay + range),
+            clamped(currentDay + (range - 1)),
+            clamped(currentDay),
+            clamped(currentDay - (range - 1)),
+            clamped(currentDay - range),
+          ];
+
+          final baseColor = Colors.grey.shade600;
+
+          double opacityForDist(int dist) {
+            // dist: 0 => 1.0, 1 => 0.75, 2 => 0.45
+            if (dist == 0) return 1.0;
+            if (dist == 1) return 0.75;
+            return 0.45;
+          }
+
+          return Column(
+            children: List.generate(topToBottomDays.length, (index) {
+              final day = topToBottomDays[index];
+              final dist = (day - currentDay).abs();
+              final alpha = opacityForDist(dist);
+              final isCurrent = day == currentDay;
+
+              return Expanded(
+                child: Center(
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(vertical: 2),
+                    child: Row(
+                      children: [
+                        Expanded(
+                          child: Text(
+                            '$day',
+                            textAlign: TextAlign.right,
+                            style: TextStyle(
+                              fontSize: isCurrent ? 16 : 12,
+                              fontWeight: isCurrent ? FontWeight.w900 : FontWeight.w500,
+                              color: baseColor.withValues(alpha: alpha),
+                            ),
+                          ),
+                        ),
+                        const SizedBox(width: 4),
+                        Container(
+                          width: isCurrent ? 14 : 10,
+                          height: isCurrent ? 3 : 2,
+                          color: baseColor.withValues(alpha: alpha),
+                        ),
+                      ],
                     ),
                   ),
                 ),
-                const SizedBox(width: 4),
-                Container(
-                  width: isHi ? 12 : 8,
-                  height: 2,
-                  color: Colors.white.withValues(alpha: isHi ? 0.9 : 0.45),
-                ),
-              ],
-            ),
+              );
+            }),
           );
         },
       ),
@@ -242,18 +276,16 @@ class _LivesRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Row(
-      mainAxisAlignment: MainAxisAlignment.center,
+    return Column(
+      mainAxisSize: MainAxisSize.min,
       children: List.generate(3, (i) {
         final alive = i < livesRemaining;
         return Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 4),
+          padding: const EdgeInsets.symmetric(vertical: 4),
           child: Icon(
             Icons.favorite,
-            size: 28,
-            color: alive
-                ? Colors.redAccent
-                : Colors.white.withValues(alpha: 0.25),
+            size: 24,
+            color: alive ? Colors.redAccent : Colors.white.withValues(alpha: 0.25),
             shadows: const [Shadow(blurRadius: 4, color: Colors.black26)],
           ),
         );
