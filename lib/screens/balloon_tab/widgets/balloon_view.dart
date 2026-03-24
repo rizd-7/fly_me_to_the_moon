@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-
+import 'dart:math';
 import '../../../models/daily_status.dart';
 
 /// Sky, ruler ticks, balloon height from [progressDays], score + flame, lives, daily actions.
@@ -208,61 +208,231 @@ class _DayRuler extends StatelessWidget {
   }
 }
 
-class _BalloonGraphic extends StatelessWidget {
+class _BalloonGraphic extends StatefulWidget {
   const _BalloonGraphic();
 
   @override
+  State<_BalloonGraphic> createState() => _BalloonGraphicState();
+}
+
+
+class _BalloonString extends StatelessWidget {
+  @override
   Widget build(BuildContext context) {
-    return Column(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        Container(
-          width: 110,
-          height: 130,
-          decoration: BoxDecoration(
-            color: const Color(0xFFE53935),
-            borderRadius: BorderRadius.circular(55),
-            boxShadow: [
-              BoxShadow(
-                color: Colors.black.withValues(alpha: 0.18),
-                blurRadius: 18,
-                offset: const Offset(0, 10),
-              ),
-            ],
-          ),
-          child: Center(
-            child: Container(
-              width: 36,
-              height: 46,
-              decoration: BoxDecoration(
-                color: Colors.white.withValues(alpha: 0.22),
-                borderRadius: BorderRadius.circular(18),
-              ),
-            ),
-          ),
+    return Container(
+      width: 2,
+      height: 24,
+      margin: const EdgeInsets.symmetric(vertical: 2),
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          begin: Alignment.topCenter,
+          end: Alignment.bottomCenter,
+          colors: [
+            const Color(0xFF9E9E9E).withValues(alpha: 0.9),
+            const Color(0xFF616161).withValues(alpha: 0.6),
+          ],
         ),
-        CustomPaint(
-          size: const Size(40, 28),
-          painter: _BasketPainter(),
-        ),
-      ],
+        borderRadius: BorderRadius.circular(1),
+      ),
+      // Optional: subtle sway using a repeating pulse
+      child: TweenAnimationBuilder<double>(
+        duration: const Duration(seconds: 2),
+        tween: Tween(begin: 0.0, end: 1.0),
+        builder: (context, value, child) {
+          return Transform.translate(
+            offset: Offset(sin(value * 6.28) * 1.5, 0), // gentle horizontal sway
+            child: child,
+          );
+        },
+        child: Container(),
+      ),
     );
   }
 }
 
-class _BasketPainter extends CustomPainter {
+
+class _BalloonGraphicState extends State<_BalloonGraphic>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _controller;
+  late final Animation<double> _floatAnimation;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = AnimationController(
+      duration: const Duration(seconds: 3),
+      vsync: this,
+    )..repeat(reverse: true);
+
+    // Smooth sine-wave floating: ±8 pixels vertically
+    _floatAnimation = Tween<double>(begin: -8.0, end: 8.0).animate(
+      CurvedAnimation(parent: _controller, curve: Curves.easeInOut),
+    );
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+Widget build(BuildContext context) {
+  return AnimatedBuilder(
+    animation: _floatAnimation,
+    builder: (context, child) {
+      return Transform.translate(
+        offset: Offset(0, _floatAnimation.value),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            // 🎈 3D Balloon body
+            Container(
+              width: 110,
+              height: 130,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle, // ✅ valid
+                gradient: RadialGradient(
+                  center: const Alignment(-0.3, -0.3),
+                  radius: 0.8,
+                  colors: const [
+                    Color(0xFFFF6B6B),
+                    Color(0xFFE53935),
+                    Color(0xFFB71C1C),
+                  ],
+                  stops: const [0.2, 0.6, 1.0],
+                ),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withValues(alpha: 0.25),
+                    blurRadius: 20,
+                    offset: const Offset(0, 12),
+                  ),
+                  BoxShadow(
+                    color: Colors.white.withValues(alpha: 0.15),
+                    blurRadius: 8,
+                    offset: const Offset(-4, -4),
+                  ),
+                ],
+              ),
+              child: Stack(
+                children: [
+                  // Glossy highlight — FIXED
+                  Positioned(
+                    top: 18,
+                    left: 22,
+                    child: Container(
+                      width: 32,
+                      height: 40,
+                      decoration: BoxDecoration(
+                        borderRadius: BorderRadius.circular(20), // ✅ oval-like
+                        gradient: LinearGradient(
+                          begin: Alignment.topLeft,
+                          end: Alignment.bottomRight,
+                          colors: [
+                            Colors.white.withValues(alpha: 0.45),
+                            Colors.white.withValues(alpha: 0.05),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ),
+                  // Bottom shadow — FIXED
+                  Positioned(
+                    bottom: 8,
+                    right: 12,
+                    child: Container(
+                      width: 24,
+                      height: 16,
+                      decoration: BoxDecoration(
+                        shape: BoxShape.circle, // ✅ valid
+                        color: Colors.black.withValues(alpha: 0.12),
+                        boxShadow: [
+                          BoxShadow(
+                            blurRadius: 6,
+                            spreadRadius: 0.5,
+                            color: Colors.transparent,
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            // 🪢 Knot
+            Container(
+              margin: const EdgeInsets.only(top: 4),
+              width: 16,
+              height: 8,
+              decoration: BoxDecoration(
+                color: const Color(0xFFC62828),
+                borderRadius: BorderRadius.circular(4),
+              ),
+            ),
+            // 🧵 String
+            _BalloonString(),
+            // 🧺 Basket
+            CustomPaint(
+              size: const Size(44, 32),
+              painter: _BasketPainter3D(),
+            ),
+          ],
+        ),
+      );
+    },
+  );
+}
+}
+
+
+class _BasketPainter3D extends CustomPainter {
   @override
   void paint(Canvas canvas, Size size) {
-    final paint = Paint()
-      ..color = const Color(0xFF5D4037)
+    // Basket body (trapezoid with depth)
+    final bodyPaint = Paint()
+      ..shader = LinearGradient(
+        begin: Alignment.topLeft,
+        end: Alignment.bottomRight,
+        colors: const [
+          Color(0xFF8D6E63), // Light brown
+          Color(0xFF5D4037), // Mid brown
+          Color(0xFF3E2723), // Dark brown shadow
+        ],
+      ).createShader(Rect.fromLTWH(0, 0, size.width, size.height))
       ..style = PaintingStyle.fill;
+
     final path = Path()
-      ..moveTo(size.width * 0.2, 0)
-      ..lineTo(size.width * 0.8, 0)
-      ..lineTo(size.width * 0.65, size.height)
-      ..lineTo(size.width * 0.35, size.height)
+      ..moveTo(size.width * 0.15, 0)
+      ..lineTo(size.width * 0.85, 0)
+      ..lineTo(size.width * 0.75, size.height)
+      ..lineTo(size.width * 0.25, size.height)
       ..close();
-    canvas.drawPath(path, paint);
+    canvas.drawPath(path, bodyPaint);
+
+    // Basket rim (top edge highlight)
+    final rimPaint = Paint()
+      ..color = const Color(0xFFA1887F).withValues(alpha: 0.7)
+      ..strokeWidth = 2
+      ..style = PaintingStyle.stroke;
+    canvas.drawLine(
+      Offset(size.width * 0.15, 0),
+      Offset(size.width * 0.85, 0),
+      rimPaint,
+    );
+
+    // Subtle weave lines for texture
+    final weavePaint = Paint()
+      ..color = const Color(0xFF3E2723).withValues(alpha: 0.25)
+      ..strokeWidth = 1;
+    for (int i = 1; i < 4; i++) {
+      final y = size.height * i / 4;
+      canvas.drawLine(
+        Offset(size.width * 0.2 + i * 2, y),
+        Offset(size.width * 0.8 - i * 2, y),
+        weavePaint,
+      );
+    }
   }
 
   @override
