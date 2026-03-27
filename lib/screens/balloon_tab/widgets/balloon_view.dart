@@ -208,67 +208,145 @@ class _DayRuler extends StatelessWidget {
   }
 }
 
-class _BalloonGraphic extends StatelessWidget {
+
+
+
+class _BalloonGraphic extends StatefulWidget {
   const _BalloonGraphic();
 
   @override
+  State<_BalloonGraphic> createState() => _BalloonGraphicState();
+}
+
+class _BalloonGraphicState extends State<_BalloonGraphic> with SingleTickerProviderStateMixin {
+  late AnimationController _controller;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = AnimationController(
+      duration: const Duration(seconds: 3),
+      vsync: this,
+    )..repeat(reverse: true);
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
   Widget build(BuildContext context) {
-    return Column(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        Container(
-          width: 110,
-          height: 130,
-          decoration: BoxDecoration(
-            color: const Color(0xFFE53935),
-            borderRadius: BorderRadius.circular(55),
-            boxShadow: [
-              BoxShadow(
-                color: Colors.black.withValues(alpha: 0.18),
-                blurRadius: 18,
-                offset: const Offset(0, 10),
+    return AnimatedBuilder(
+      animation: _controller,
+      builder: (context, child) {
+        // Smooth floating Sine wave
+        final double offset = Curves.easeInOutSine.transform(_controller.value) * 12;
+        return Transform.translate(
+          offset: Offset(0, -offset),
+          child: child,
+        );
+      },
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          // 3D Balloon Head
+          Container(
+            width: 100,
+            height: 120,
+            decoration: BoxDecoration(
+              shape: BoxShape.circle,
+              gradient: const RadialGradient(
+                center: Alignment(-0.3, -0.4),
+                colors: [Color(0xFFFF7043), Color(0xFFE53935), Color(0xFFB71C1C)],
+                stops: [0.1, 0.6, 1.0],
               ),
-            ],
-          ),
-          child: Center(
-            child: Container(
-              width: 36,
-              height: 46,
-              decoration: BoxDecoration(
-                color: Colors.white.withValues(alpha: 0.22),
-                borderRadius: BorderRadius.circular(18),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withValues(alpha: 0.1),
+                  blurRadius: 20,
+                  offset: const Offset(0, 30), // Shadow stays lower for depth
+                ),
+              ],
+            ),
+            child: Align(
+              alignment: const Alignment(-0.4, -0.5),
+              child: Container(
+                width: 20,
+                height: 30,
+                decoration: BoxDecoration(
+                  color: Colors.white.withValues(alpha: 0.25),
+                  borderRadius: BorderRadius.circular(15),
+                ),
               ),
             ),
           ),
-        ),
-        CustomPaint(
-          size: const Size(40, 28),
-          painter: _BasketPainter(),
-        ),
-      ],
+          // Connection & Basket
+          Transform.translate(
+            offset: const Offset(0, -5), // Pulls the strings UP to touch the balloon
+            child: CustomPaint(
+              size: const Size(80, 60), 
+              painter: _BalloonDetailsPainter(),
+            ),
+          ),
+        ],
+      ),
     );
   }
 }
 
-class _BasketPainter extends CustomPainter {
+class _BalloonDetailsPainter extends CustomPainter {
   @override
   void paint(Canvas canvas, Size size) {
-    final paint = Paint()
+    final centerX = size.width / 2;
+    
+    final stringPaint = Paint()
+      ..color = const Color(0xFF8D6E63).withValues(alpha: 0.6)
+      ..strokeWidth = 1.2
+      ..style = PaintingStyle.stroke;
+
+    final basketPaint = Paint()
       ..color = const Color(0xFF5D4037)
       ..style = PaintingStyle.fill;
-    final path = Path()
-      ..moveTo(size.width * 0.2, 0)
-      ..lineTo(size.width * 0.8, 0)
-      ..lineTo(size.width * 0.65, size.height)
-      ..lineTo(size.width * 0.35, size.height)
+
+    // 1. Draw the "Tie/Knot" at the bottom of the balloon
+    final knotPath = Path()
+      ..moveTo(centerX - 8, 0)
+      ..lineTo(centerX + 8, 0)
+      ..lineTo(centerX + 4, 8)
+      ..lineTo(centerX - 4, 8)
       ..close();
-    canvas.drawPath(path, paint);
+    canvas.drawPath(knotPath, Paint()..color = const Color(0xFFB71C1C));
+
+    // 2. Draw Strings (Starting from the knot)
+    final stringPath = Path();
+    // Left string
+    stringPath.moveTo(centerX - 4, 4);
+    stringPath.lineTo(size.width * 0.3, size.height * 0.7);
+    // Right string
+    stringPath.moveTo(centerX + 4, 4);
+    stringPath.lineTo(size.width * 0.7, size.height * 0.7);
+    canvas.drawPath(stringPath, stringPaint);
+
+    // 3. Draw Basket
+    final basketRect = RRect.fromRectAndRadius(
+      Rect.fromLTWH(size.width * 0.3, size.height * 0.7, size.width * 0.4, size.height * 0.3),
+      const Radius.circular(4),
+    );
+    
+    canvas.drawRRect(basketRect, basketPaint);
+    
+    // Basket rim (detail)
+    canvas.drawRect(
+      Rect.fromLTWH(size.width * 0.28, size.height * 0.7, size.width * 0.44, 3),
+      Paint()..color = const Color(0xFF3E2723),
+    );
   }
 
   @override
   bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
 }
-
 class _LivesRow extends StatelessWidget {
   const _LivesRow({required this.livesRemaining});
 
