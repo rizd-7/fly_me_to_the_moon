@@ -209,8 +209,6 @@ class _DayRuler extends StatelessWidget {
 }
 
 
-
-
 class _BalloonGraphic extends StatefulWidget {
   const _BalloonGraphic();
 
@@ -347,6 +345,10 @@ class _BalloonDetailsPainter extends CustomPainter {
   @override
   bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
 }
+
+
+
+
 class _LivesRow extends StatelessWidget {
   const _LivesRow({required this.livesRemaining});
 
