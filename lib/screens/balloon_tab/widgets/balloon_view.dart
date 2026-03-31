@@ -125,88 +125,94 @@ class _SkyBackground extends StatelessWidget {
   }
 }
 
+
+
 class _DayRuler extends StatelessWidget {
   const _DayRuler({required this.currentDay});
 
-  // Only show the current day + 2 days before + 2 days after.
-  // Current day is full opacity; distance fades out.
   final int currentDay;
-
   static const int range = 2;
 
   @override
   Widget build(BuildContext context) {
+    const activeColor = Color(0xFFE53935);
+    final inactiveColor = Colors.grey.shade400;
+
     return Container(
+      // Increase width slightly to prevent the 13px overflow
+      width: 55, 
       padding: const EdgeInsets.only(right: 4),
-      decoration: BoxDecoration(
-        border: Border(
-          right: BorderSide(color: Colors.grey.withValues(alpha: 0.35)),
-        ),
-      ),
       child: LayoutBuilder(
         builder: (context, constraints) {
-          // We render 5 fixed vertical slots so the direction is stable.
-          // Values are clamped to 0 (as requested).
           int clamped(int v) => (v < 0 ? 0 : v);
           final topToBottomDays = <int>[
             clamped(currentDay + range),
-            clamped(currentDay + (range - 1)),
-            clamped(currentDay),
-            clamped(currentDay - (range - 1)),
+            clamped(currentDay + 1),
+            currentDay,
+            clamped(currentDay - 1),
             clamped(currentDay - range),
           ];
 
-          final baseColor = Colors.grey.shade600;
+          return Stack(
+            alignment: Alignment.centerRight,
+            children: [
+              // Background line
+              Positioned(
+                top: 10,
+                bottom: 10,
+                right: 2,
+                child: Container(
+                  width: 1.5,
+                  color: inactiveColor.withValues(alpha: 0.2),
+                ),
+              ),
+              Column(
+                children: List.generate(topToBottomDays.length, (index) {
+                  final day = topToBottomDays[index];
+                  final isCurrent = day == currentDay;
+                  final distance = (day - currentDay).abs();
+                  final double opacity = isCurrent ? 1.0 : (distance == 1 ? 0.6 : 0.3);
 
-          double opacityForDist(int dist) {
-            // dist: 0 => 1.0, 1 => 0.75, 2 => 0.45
-            if (dist == 0) return 1.0;
-            if (dist == 1) return 0.75;
-            return 0.45;
-          }
-
-          return Column(
-            children: List.generate(topToBottomDays.length, (index) {
-              final day = topToBottomDays[index];
-              final dist = (day - currentDay).abs();
-              final alpha = opacityForDist(dist);
-              final isCurrent = day == currentDay;
-
-              return Expanded(
-                child: Center(
-                  child: Padding(
-                    padding: const EdgeInsets.symmetric(vertical: 2),
+                  return Expanded(
                     child: Row(
+                      // Use mainAxisSize min so it doesn't try to take up infinite space
+                      mainAxisSize: MainAxisSize.min,
+                      mainAxisAlignment: MainAxisAlignment.end,
+                      crossAxisAlignment: CrossAxisAlignment.center,
                       children: [
-                        Expanded(
-                          child: Text(
-                            '$day',
-                            textAlign: TextAlign.right,
-                            style: TextStyle(
-                              fontSize: isCurrent ? 16 : 12,
-                              fontWeight: isCurrent ? FontWeight.w900 : FontWeight.w500,
-                              color: baseColor.withValues(alpha: alpha),
-                            ),
+                        // Day Number
+                        Text(
+                          '$day',
+                          style: TextStyle(
+                            fontSize: isCurrent ? 16 : 12,
+                            fontWeight: isCurrent ? FontWeight.w900 : FontWeight.w500,
+                            color: (isCurrent ? activeColor : inactiveColor).withValues(alpha: opacity),
                           ),
                         ),
-                        const SizedBox(width: 4),
+                        const SizedBox(width: 6),
+                        // Tick Mark
                         Container(
-                          width: isCurrent ? 14 : 10,
-                          height: isCurrent ? 3 : 2,
-                          color: baseColor.withValues(alpha: alpha),
+                          width: isCurrent ? 12 : 6,
+                          height: isCurrent ? 3 : 1.5,
+                          decoration: BoxDecoration(
+                            color: (isCurrent ? activeColor : inactiveColor).withValues(alpha: opacity),
+                            borderRadius: BorderRadius.circular(2),
+                          ),
                         ),
                       ],
                     ),
-                  ),
-                ),
-              );
-            }),
+                  );
+                }),
+              ),
+            ],
           );
         },
       ),
     );
   }
 }
+
+
 
 
 class _BalloonGraphic extends StatefulWidget {
