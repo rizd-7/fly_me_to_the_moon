@@ -2,7 +2,91 @@ import 'package:flutter/material.dart';
 
 import '../../../models/daily_status.dart';
 
-/// Sky, ruler ticks, balloon height from [progressDays], score + flame, lives, daily actions.
+
+/// Scrolling background - Creates the rising balloon illusion
+/// As progress increases, the LONG background moves UP → balloon appears to rise
+class _ScrollingBackground extends StatelessWidget {
+  const _ScrollingBackground({
+    required this.progressDays,
+    required this.availableHeight,
+  });
+
+  final int progressDays;
+  final double availableHeight;
+
+  @override
+  Widget build(BuildContext context) {
+    final screenWidth = MediaQuery.sizeOf(context).width;
+
+    const imageWidth = 978.0;
+    const imageHeight = 2798.0;
+
+    final aspectRatio = imageHeight / imageWidth;
+    final scaledImageHeight = screenWidth * aspectRatio;
+
+    // Progress 0.0 → 1.0 (you can change 60 to 90 or 120 if you want slower/faster rise)
+    final t = (progressDays / 60.0).clamp(0.0, 1.0);
+
+    final maxScroll = scaledImageHeight - availableHeight;
+
+    // === CORRECTED DIRECTION ===
+    // We want the image to move UP as t increases
+    // So we use negative offset and invert the logic
+    final scrollOffset = t * maxScroll;
+
+    // At t = 0, we want the BOTTOM of the image at the bottom of the screen
+    final topOffset = availableHeight - scaledImageHeight + scrollOffset;
+
+    return Stack(
+      fit: StackFit.expand,
+      children: [
+        Positioned(
+          top: topOffset,
+          left: 0,
+          width: screenWidth,
+          height: scaledImageHeight,
+          child: Image.asset(
+            'assets/images/env.png',
+            fit: BoxFit.fill,
+            filterQuality: FilterQuality.high,
+            errorBuilder: (context, error, stackTrace) {
+              return Container(
+                color: Colors.blue.shade100,
+                child: Center(
+                  child: Text(
+                    '⚠️ Image not found\nCheck: assets/images/env.png',
+                    textAlign: TextAlign.center,
+                    style: TextStyle(color: Colors.red.shade700),
+                  ),
+                ),
+              );
+            },
+          ),
+        ),
+        Positioned.fill(
+          child: DecoratedBox(
+            decoration: BoxDecoration(
+              gradient: LinearGradient(
+                begin: Alignment.topCenter,
+                end: Alignment.bottomCenter,
+                colors: [
+                  Colors.transparent,
+                  Colors.black.withValues(alpha: 0.08),
+                  Colors.black.withValues(alpha: 0.22),
+                ],
+                stops: const [0.6, 0.85, 1.0],
+              ),
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+
+
+
 class BalloonView extends StatelessWidget {
   const BalloonView({
     super.key,
@@ -23,109 +107,97 @@ class BalloonView extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final t = (progressDays / (progressDays + 28)).clamp(0.0, 1.0);
-    // Center balloon on screen, then move it up/down based on progress.
-    // This makes centering independent from the left ruler width.
-    final screenHeight = MediaQuery.sizeOf(context).height;
-    final maxShiftY = screenHeight * 0.35;
-    final dy = -t * maxShiftY;
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final availableHeight = constraints.maxHeight;
 
-    final rulerLeft = 8.0;
-    final rulerWidth = 40.0;
+        const rulerLeft = 8.0;
+        const rulerWidth = 40.0;
 
-    return Stack(
-      fit: StackFit.expand,
-      children: [
-        const _SkyBackground(),
-        Positioned(
-          left: rulerLeft,
-          top: 72,
-          bottom: 120,
-          width: rulerWidth,
-          child: _DayRuler(currentDay: progressDays),
-        ),
-        Positioned(
-          left: 0,
-          right: 0,
-          top: 48,
-          child: Column(
-            children: [
-              Text(
-                habitName,
-                textAlign: TextAlign.center,
-                style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                      color: Colors.white.withValues(alpha: 0.95),
-                      fontWeight: FontWeight.w600,
-                      shadows: const [
-                        Shadow(blurRadius: 4, color: Colors.black26),
-                      ],
-                    ),
-              ),
-              const SizedBox(height: 6),
-              Opacity(
-                opacity: 0.45,
-                child: Text(
-                  '$progressDays 🔥',
-                  style: TextStyle(
-                    fontSize: 22,
-                    fontWeight: FontWeight.w600,
-                    color: Colors.grey.shade200,
+        return Stack(
+          fit: StackFit.expand,
+          children: [
+            // Scrolling background - creates the rising effect
+            _ScrollingBackground(
+              progressDays: progressDays,
+              availableHeight: availableHeight,
+            ),
+
+            // Day Ruler
+            Positioned(
+              left: rulerLeft,
+              top: 72,
+              bottom: 120,
+              width: rulerWidth,
+              child: _DayRuler(currentDay: progressDays),
+            ),
+
+            // Habit name + score at top
+            Positioned(
+              left: 0,
+              right: 0,
+              top: 48,
+              child: Column(
+                children: [
+                  Text(
+                    habitName,
+                    textAlign: TextAlign.center,
+                    style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                          color: Colors.white.withValues(alpha: 0.95),
+                          fontWeight: FontWeight.w600,
+                          shadows: const [
+                            Shadow(blurRadius: 4, color: Colors.black26),
+                          ],
+                        ),
                   ),
-                ),
+                  const SizedBox(height: 6),
+                  // Fixed: removed const from TextStyle because of .shade200
+                  Opacity(
+                    opacity: 0.45,
+                    child: Text(
+                      '$progressDays 🔥',
+                      style: TextStyle(
+                        fontSize: 22,
+                        fontWeight: FontWeight.w600,
+                        color: Colors.grey.shade200,
+                      ),
+                    ),
+                  ),
+                ],
               ),
-            ],
-          ),
-        ),
-        // Balloon: centered on X and Y of the screen, with a score-based vertical shift.
-        Center(
-          child: Transform.translate(
-            offset: Offset(0, dy),
-            child: const _BalloonGraphic(),
-          ),
-        ),
-        // Hearts under the AppBar `+` button (top-right).
-        Positioned(
-          top: MediaQuery.of(context).padding.top + kToolbarHeight + 8,
-          right: 16,
-          child: _LivesRow(livesRemaining: livesRemaining),
-        ),
-        Positioned(
-          left: 16,
-          right: 16,
-          bottom: 24,
-          child: _TodayActions(
-            todayStatus: todayStatus,
-            onCheck: onCheck,
-            onFail: onFail,
-          ),
-        ),
-      ],
-    );
-  }
-}
+            ),
 
-class _SkyBackground extends StatelessWidget {
-  const _SkyBackground();
+            // Balloon stays fixed in the center (this creates the rising illusion)
+            const Center(
+              child: _BalloonGraphic(),
+            ),
 
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      decoration: const BoxDecoration(
-        gradient: LinearGradient(
-          begin: Alignment.topCenter,
-          end: Alignment.bottomCenter,
-          colors: [
-            Color(0xFF87CEEB),
-            Color(0xFFB8E0FF),
-            Color(0xFFE8F4FF),
+            // Lives counter (top right)
+            Positioned(
+              top: MediaQuery.of(context).padding.top + kToolbarHeight + 8,
+              right: 16,
+              child: _LivesRow(livesRemaining: livesRemaining),
+            ),
+
+            // Today's check/fail buttons
+            Positioned(
+              left: 16,
+              right: 16,
+              bottom: 24,
+              child: _TodayActions(
+                todayStatus: todayStatus,
+                onCheck: onCheck,
+                onFail: onFail,
+              ),
+            ),
           ],
-        ),
-      ),
+        );
+      },
     );
   }
 }
 
-
+// ==================== UNCHANGED PARTS ====================
 
 class _DayRuler extends StatelessWidget {
   const _DayRuler({required this.currentDay});
@@ -139,8 +211,7 @@ class _DayRuler extends StatelessWidget {
     final inactiveColor = Colors.grey.shade400;
 
     return Container(
-      // Increase width slightly to prevent the 13px overflow
-      width: 55, 
+      width: 55,
       padding: const EdgeInsets.only(right: 4),
       child: LayoutBuilder(
         builder: (context, constraints) {
@@ -156,7 +227,6 @@ class _DayRuler extends StatelessWidget {
           return Stack(
             alignment: Alignment.centerRight,
             children: [
-              // Background line
               Positioned(
                 top: 10,
                 bottom: 10,
@@ -171,31 +241,32 @@ class _DayRuler extends StatelessWidget {
                   final day = topToBottomDays[index];
                   final isCurrent = day == currentDay;
                   final distance = (day - currentDay).abs();
-                  final double opacity = isCurrent ? 1.0 : (distance == 1 ? 0.6 : 0.3);
+                  final double opacity =
+                      isCurrent ? 1.0 : (distance == 1 ? 0.6 : 0.3);
 
                   return Expanded(
                     child: Row(
-                      // Use mainAxisSize min so it doesn't try to take up infinite space
                       mainAxisSize: MainAxisSize.min,
                       mainAxisAlignment: MainAxisAlignment.end,
                       crossAxisAlignment: CrossAxisAlignment.center,
                       children: [
-                        // Day Number
                         Text(
                           '$day',
                           style: TextStyle(
                             fontSize: isCurrent ? 16 : 12,
-                            fontWeight: isCurrent ? FontWeight.w900 : FontWeight.w500,
-                            color: (isCurrent ? activeColor : inactiveColor).withValues(alpha: opacity),
+                            fontWeight:
+                                isCurrent ? FontWeight.w900 : FontWeight.w500,
+                            color: (isCurrent ? activeColor : inactiveColor)
+                                .withValues(alpha: opacity),
                           ),
                         ),
                         const SizedBox(width: 6),
-                        // Tick Mark
                         Container(
                           width: isCurrent ? 12 : 6,
                           height: isCurrent ? 3 : 1.5,
                           decoration: BoxDecoration(
-                            color: (isCurrent ? activeColor : inactiveColor).withValues(alpha: opacity),
+                            color: (isCurrent ? activeColor : inactiveColor)
+                                .withValues(alpha: opacity),
                             borderRadius: BorderRadius.circular(2),
                           ),
                         ),
@@ -212,9 +283,6 @@ class _DayRuler extends StatelessWidget {
   }
 }
 
-
-
-
 class _BalloonGraphic extends StatefulWidget {
   const _BalloonGraphic();
 
@@ -222,7 +290,8 @@ class _BalloonGraphic extends StatefulWidget {
   State<_BalloonGraphic> createState() => _BalloonGraphicState();
 }
 
-class _BalloonGraphicState extends State<_BalloonGraphic> with SingleTickerProviderStateMixin {
+class _BalloonGraphicState extends State<_BalloonGraphic>
+    with SingleTickerProviderStateMixin {
   late AnimationController _controller;
 
   @override
@@ -245,8 +314,8 @@ class _BalloonGraphicState extends State<_BalloonGraphic> with SingleTickerProvi
     return AnimatedBuilder(
       animation: _controller,
       builder: (context, child) {
-        // Smooth floating Sine wave
-        final double offset = Curves.easeInOutSine.transform(_controller.value) * 12;
+        final double offset =
+            Curves.easeInOutSine.transform(_controller.value) * 12;
         return Transform.translate(
           offset: Offset(0, -offset),
           child: child,
@@ -255,7 +324,6 @@ class _BalloonGraphicState extends State<_BalloonGraphic> with SingleTickerProvi
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          // 3D Balloon Head
           Container(
             width: 100,
             height: 120,
@@ -270,7 +338,7 @@ class _BalloonGraphicState extends State<_BalloonGraphic> with SingleTickerProvi
                 BoxShadow(
                   color: Colors.black.withValues(alpha: 0.1),
                   blurRadius: 20,
-                  offset: const Offset(0, 30), // Shadow stays lower for depth
+                  offset: const Offset(0, 30),
                 ),
               ],
             ),
@@ -286,11 +354,10 @@ class _BalloonGraphicState extends State<_BalloonGraphic> with SingleTickerProvi
               ),
             ),
           ),
-          // Connection & Basket
           Transform.translate(
-            offset: const Offset(0, -5), // Pulls the strings UP to touch the balloon
+            offset: const Offset(0, -5),
             child: CustomPaint(
-              size: const Size(80, 60), 
+              size: const Size(80, 60),
               painter: _BalloonDetailsPainter(),
             ),
           ),
@@ -304,7 +371,7 @@ class _BalloonDetailsPainter extends CustomPainter {
   @override
   void paint(Canvas canvas, Size size) {
     final centerX = size.width / 2;
-    
+
     final stringPaint = Paint()
       ..color = const Color(0xFF8D6E63).withValues(alpha: 0.6)
       ..strokeWidth = 1.2
@@ -314,7 +381,6 @@ class _BalloonDetailsPainter extends CustomPainter {
       ..color = const Color(0xFF5D4037)
       ..style = PaintingStyle.fill;
 
-    // 1. Draw the "Tie/Knot" at the bottom of the balloon
     final knotPath = Path()
       ..moveTo(centerX - 8, 0)
       ..lineTo(centerX + 8, 0)
@@ -323,25 +389,23 @@ class _BalloonDetailsPainter extends CustomPainter {
       ..close();
     canvas.drawPath(knotPath, Paint()..color = const Color(0xFFB71C1C));
 
-    // 2. Draw Strings (Starting from the knot)
     final stringPath = Path();
-    // Left string
     stringPath.moveTo(centerX - 4, 4);
     stringPath.lineTo(size.width * 0.3, size.height * 0.7);
-    // Right string
     stringPath.moveTo(centerX + 4, 4);
     stringPath.lineTo(size.width * 0.7, size.height * 0.7);
     canvas.drawPath(stringPath, stringPaint);
 
-    // 3. Draw Basket
     final basketRect = RRect.fromRectAndRadius(
-      Rect.fromLTWH(size.width * 0.3, size.height * 0.7, size.width * 0.4, size.height * 0.3),
+      Rect.fromLTWH(
+        size.width * 0.3,
+        size.height * 0.7,
+        size.width * 0.4,
+        size.height * 0.3,
+      ),
       const Radius.circular(4),
     );
-    
     canvas.drawRRect(basketRect, basketPaint);
-    
-    // Basket rim (detail)
     canvas.drawRect(
       Rect.fromLTWH(size.width * 0.28, size.height * 0.7, size.width * 0.44, 3),
       Paint()..color = const Color(0xFF3E2723),
@@ -351,9 +415,6 @@ class _BalloonDetailsPainter extends CustomPainter {
   @override
   bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
 }
-
-
-
 
 class _LivesRow extends StatelessWidget {
   const _LivesRow({required this.livesRemaining});
@@ -371,7 +432,9 @@ class _LivesRow extends StatelessWidget {
           child: Icon(
             Icons.favorite,
             size: 24,
-            color: alive ? Colors.redAccent : Colors.white.withValues(alpha: 0.25),
+            color: alive
+                ? Colors.redAccent
+                : Colors.white.withValues(alpha: 0.25),
             shadows: const [Shadow(blurRadius: 4, color: Colors.black26)],
           ),
         );
